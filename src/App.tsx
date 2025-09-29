@@ -155,11 +155,11 @@ export default function App() {
             boxShadow: "var(--shadow)",
           }}
         >
-          <img
-            src="/CNMI_logo.png"
-            alt="CNMI Logo"
-            style={{ height: 80, width: 160, objectFit: "contain" }}
-          />
+      <img
+  src={`${process.env.PUBLIC_URL}/CNMI_logo.png`}
+  alt="CNMI Logo"
+  style={{ height: 80, width: 160, objectFit: "contain" }}
+/>
           <div>
             <h1
               style={{
