@@ -109,4 +109,14 @@ body{
   .cards{grid-template-columns:1fr}
   .species{grid-template-columns:1fr}
 }
+.hero-logo {
+  height: 80px;
+  width: 160px;
+  object-fit: contain;
+
+  background: white;        /* ทำให้มีพื้นหลังสีขาว */
+  border-radius: 8px;       /* มุมโค้งนิดๆ */
+  padding: 4px;             /* เว้นพื้นที่รอบโลโก้ */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* เงาเบาๆ */
+}
 
