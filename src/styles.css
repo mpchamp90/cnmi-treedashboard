@@ -1,123 +1,112 @@
-/* 1) โหลดฟอนต์ (คงเดิม) */
+/* Font */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap");
 
-:root {
-  --bg: #fffdf5; /* พื้นหลังนอกการ์ด: ครีมอ่อน */
-  --card: #ffffff; /* การ์ด/บล็อกข้อมูล: ขาว */
-  --ink: #0f172a; /* ข้อความหลัก */
-  --muted: #475569; /* ข้อความรอง */
-  --green: #14532d;
-  --green-2: #16a34a;
-  --line: #e5e7eb;
-
-  /* 2) ปรับเงาใหม่ ให้นุ่มขึ้นและดู modern */
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-
-  /* 3) เพิ่ม radius ให้อารมณ์กลมขึ้น */
-  --radius: 20px;
+/* Theme tokens */
+:root{
+  --bg:#fffdf5;         /* ครีมอ่อน พื้นหลังนอกการ์ด */
+  --card:#ffffff;       /* สีพื้นการ์ด */
+  --ink:#0f172a;        /* ข้อความหลัก */
+  --muted:#475569;      /* ข้อความรอง */
+  --green:#14532d;      /* เขียวเข้ม (หัวเรื่อง) */
+  --green-2:#16a34a;    /* เขียวสด (แถบ/กราฟ) */
+  --line:#e5e7eb;       /* เส้นแบ่ง/กรอบ */
+  --shadow:0 4px 12px rgba(0,0,0,.08);
+  --radius:20px;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+/* Base */
+html,body,#root{height:100%;}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:"Noto Sans Thai",system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--ink);
+  line-height:1.6;
+  font-feature-settings:"tnum";
 }
 
-body {
-  font-family: "Noto Sans Thai", system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--ink);
-  font-feature-settings: "tnum";
-  /* 4) เพิ่ม line-height ให้การอ่านดูโปร่ง */
-  line-height: 1.6;
+/* Layout */
+.container{max-width:1200px;margin:0 auto;padding:32px 20px;}
+.full-center{min-height:70vh;display:grid;place-items:center;font-size:18px}
+
+/* Header */
+.hero{
+  display:flex;align-items:center;gap:20px;
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px 28px;background:var(--card);box-shadow:var(--shadow);
+}
+.hero-logo{height:80px;width:160px;object-fit:contain}
+.title{font-size:34px;font-weight:800;color:var(--green);margin:0}
+.subtitle{font-size:15px;color:var(--muted);margin:6px 0 0}
+
+/* Badge ขวาบน */
+.badge{
+  margin-left:auto;display:inline-block;white-space:pre-line;text-align:center;line-height:1.4;
+  padding:6px 12px;border-radius:12px;background:#f0fdf4;color:#166534;font-size:12px;font-weight:600;
+  border:1px solid #bbf7d0;box-shadow:0 1px 3px rgba(0,0,0,.08);
 }
 
-/* 5) ให้ container หลักมี spacing รอบตัว */
-.App {
-  text-align: center;
-  padding: 24px; /* เพิ่ม */
+/* KPI Cards grid */
+.cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px;margin-top:24px}
+
+/* Card */
+.card{
+  padding:20px 16px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  min-height:150px;box-shadow:var(--shadow);
+}
+.card-title{font-size:13px;color:#0f3b6d;margin-bottom:10px;white-space:pre-line}
+.card-line{width:60%;height:1px;background:var(--line);margin:6px 0 12px}
+.card-value{font-size:32px;font-weight:800;line-height:1.2;color:#065f46}
+.card-suffix{font-size:14px;font-weight:500;margin-top:4px;color:#334155}
+
+/* Highlight box (Top species) */
+.section-heading{font-size:18px;color:var(--ink);margin:0 0 12px}
+.highlight-box{
+  display:grid;grid-template-columns:1.5fr 1fr;gap:12px;align-items:center;
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);padding:20px;box-shadow:var(--shadow);
+}
+.highlight-name{font-size:18px;font-weight:700;color:#065f46}
+.highlight-count{justify-self:end;font-size:16px;font-weight:600;color:#334155}
+
+/* Species section (สองคอลัมน์) */
+.species{margin-top:32px;display:grid;grid-template-columns:1.5fr 1fr;gap:24px}
+.species-card{
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);padding:20px;box-shadow:var(--shadow);
+}
+.no-data{color:#64748b;margin:0}
+
+/* Section title */
+.section-title{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.section-title .section-bar{width:6px;height:18px;border-radius:9999px;background:var(--green-2)}
+.section-title h3{margin:0;font-size:18px;color:var(--ink)}
+
+/* Species list */
+.species-list{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.species-item{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:10px 14px;border:1px solid var(--line);border-radius:12px;
+}
+.species-name{font-weight:600;color:var(--ink)}
+.species-count{color:#334155}
+
+/* Footer */
+.footer{text-align:center;color:var(--muted);font-size:12px;margin:32px 0 8px}
+
+/* Responsive */
+@media (max-width:1024px){
+  .cards{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .species{grid-template-columns:1fr}
+  .highlight-box{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .hero{flex-direction:column;text-align:center}
+  .hero-logo{height:64px;width:auto}
+  .title{font-size:26px}
+  .cards{grid-template-columns:1fr}
+  .species{grid-template-columns:1fr}
 }
 
-/* 6) Hero section (โลโก้ + title) */
-.hero {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px; /* เดิม 20px → เพิ่มช่องไฟ */
-  max-width: 1100px;
-  margin: 40px auto 32px auto; /* เดิม 32px auto 24px → เพิ่มระยะห่าง */
-  padding: 0 20px; /* เดิม 16px */
-}
-
-/* 7) โลโก้ให้ดูโปรกว่า */
-.hero-logo {
-  height: 72px; /* เดิม 60px */
-  width: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)); /* เพิ่มเงา */
-}
-/* สำหรับหน้าจอเล็กกว่า 768px (มือถือ) */
-@media (max-width: 768px) {
-  .cards-container {
-    display: flex;
-    flex-direction: column; /* จากเดิมเป็น row → เปลี่ยนเรียงลง */
-    align-items: center;
-    gap: 12px;
-  }
-
-  .card {
-    width: 90%;   /* ให้เต็มจอมือถือพอดี */
-    font-size: 14px;
-    text-align: center;
-  }
-
-  .chart-container {
-    flex-direction: column; /* กราฟกับ list เรียงลงแทนเรียงข้าง */
-  }
-
-  .chart, .list {
-    width: 100%;
-  }
-}
-/* layout พื้นฐาน */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 20px;
-}
-
-.hero { display:flex; align-items:center; gap:20px; }
-.hero .title { font-size:32px; font-weight:800; color:#14532d; margin:0; }
-
-/* grid ของ KPI */
-.kpi {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-}
-
-/* สองคอลัมน์ (กราฟ + ลิสต์) */
-.two-cols {
-  margin-top: 28px;
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 20px;
-}
-
-/* ———— Responsive ———— */
-@media (max-width: 1024px) {
-  .kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .two-cols { grid-template-columns: 1fr; } /* tablet ให้เรียงลง */
-}
-
-@media (max-width: 640px) {
-  .hero { flex-direction: column; text-align: center; }
-  .hero img { height:64px; }
-  .hero .title { font-size:26px; }
-
-  .kpi { grid-template-columns: 1fr; }   /* การ์ด KPI เรียงลงทีละใบ */
-  .two-cols { grid-template-columns: 1fr; } /* กราฟกับลิสต์เรียงลง */
-}
