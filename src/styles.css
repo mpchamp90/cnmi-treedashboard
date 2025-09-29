@@ -1,0 +1,60 @@
+/* 1) โหลดฟอนต์ (คงเดิม) */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap");
+
+:root {
+  --bg: #fffdf5; /* พื้นหลังนอกการ์ด: ครีมอ่อน */
+  --card: #ffffff; /* การ์ด/บล็อกข้อมูล: ขาว */
+  --ink: #0f172a; /* ข้อความหลัก */
+  --muted: #475569; /* ข้อความรอง */
+  --green: #14532d;
+  --green-2: #16a34a;
+  --line: #e5e7eb;
+
+  /* 2) ปรับเงาใหม่ ให้นุ่มขึ้นและดู modern */
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* 3) เพิ่ม radius ให้อารมณ์กลมขึ้น */
+  --radius: 20px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Noto Sans Thai", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "tnum";
+  /* 4) เพิ่ม line-height ให้การอ่านดูโปร่ง */
+  line-height: 1.6;
+}
+
+/* 5) ให้ container หลักมี spacing รอบตัว */
+.App {
+  text-align: center;
+  padding: 24px; /* เพิ่ม */
+}
+
+/* 6) Hero section (โลโก้ + title) */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px; /* เดิม 20px → เพิ่มช่องไฟ */
+  max-width: 1100px;
+  margin: 40px auto 32px auto; /* เดิม 32px auto 24px → เพิ่มระยะห่าง */
+  padding: 0 20px; /* เดิม 16px */
+}
+
+/* 7) โลโก้ให้ดูโปรกว่า */
+.hero-logo {
+  height: 72px; /* เดิม 60px */
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)); /* เพิ่มเงา */
+}
