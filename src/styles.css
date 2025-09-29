@@ -58,36 +58,26 @@ body {
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)); /* เพิ่มเงา */
 }
-/* layout พื้นฐาน */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 20px;
+/* สำหรับหน้าจอเล็กกว่า 768px (มือถือ) */
+@media (max-width: 768px) {
+  .cards-container {
+    display: flex;
+    flex-direction: column; /* จากเดิมเป็น row → เปลี่ยนเรียงลง */
+    align-items: center;
+    gap: 12px;
+  }
+
+  .card {
+    width: 90%;   /* ให้เต็มจอมือถือพอดี */
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .chart-container {
+    flex-direction: column; /* กราฟกับ list เรียงลงแทนเรียงข้าง */
+  }
+
+  .chart, .list {
+    width: 100%;
+  }
 }
-
-.hero { display:flex; align-items:center; gap:20px; }
-.hero .title { font-size:32px; font-weight:800; color:#14532d; margin:0; }
-
-/* grid ของ KPI */
-.kpi {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-}
-
-/* สองคอลัมน์ (กราฟ + ลิสต์) */
-.two-cols {
-  margin-top: 28px;
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 20px;
-}
-
-/* ———— Responsive ———— */
-@media (max-width: 1024px) {
-  .kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .two-cols { grid-template-columns: 1fr; } /* tablet ให้เรียงลง */
-}
-
-@media (max-wi
