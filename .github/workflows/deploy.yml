@@ -24,14 +24,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: npm
+          node-version: 18   # ไม่ใช้ cache เพื่อเลี่ยง lockfile
 
       - name: Install deps
-        run: npm ci
+        run: npm install     # ใช้ install แทน ci (ไม่ต้องมี package-lock)
 
       - name: Build
-        run: npm run build  # CRA จะ build ไปที่ ./build
+        run: npm run build   # CRA จะสร้างโฟลเดอร์ build/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
