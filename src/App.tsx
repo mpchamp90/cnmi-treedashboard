@@ -1,78 +1,151 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Map, Sprout, Activity, Settings, Trees, Wind, PieChart, RefreshCw, Menu, BarChart3, Layers, AlertCircle } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import {
+  Map,
+  Sprout,
+  Activity,
+  Trees,
+  Wind,
+  Menu,
+  Layers,
+  AlertCircle,
+} from "lucide-react";
 
-// --- CONFIGURATION ---
+/* ================= CONFIG ================= */
 const SHEET_ID = "1JRPKppFO8s41gTIM26xZLojsaij-eQG2qo-mhwAg1qg";
-const GID_SUMMARY = "1289823245"; // หน้า Summary
-const SPECIES_RANGE = "H8:I"; // ตารางชนิดพันธุ์ไม้ (H=ชื่อ, I=จำนวน)
+const GID_SUMMARY = "1289823245";
+const SPECIES_RANGE = "H8:I";
 
-// --- UTILITIES (Logic จากโค้ดเดิมของคุณ) ---
+/* ================= TYPES ================= */
+type MenuId = "dashboard" | "inventory" | "map" | "settings";
+
+type SidebarProps = {
+  isOpen: boolean;
+  toggleSidebar: () => void;
+  activeMenu: MenuId;
+  setActiveMenu: (id: MenuId) => void;
+};
+
+type StatCardProps = {
+  title: string;
+  value: number | null;
+  unit: string;
+  subtext: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  colorClass: string;
+  loading: boolean;
+};
+
+type DashboardData = {
+  totalCount: number | null;
+  measured: number | null;
+  totalCO2eTon: number | null;
+  avgDBHcm: number | null;
+  avgPerTreeKg: number | null;
+  topSpeciesName: string | null;
+  topSpeciesCount: number | null;
+};
+
+type SpeciesRow = { name: string; count: number };
+
+type GvizCell = { v?: unknown; f?: string } | null;
+type GvizRow = { c?: GvizCell[] };
+type GvizTable = { rows?: GvizRow[] };
+
+/* ================= UTILITIES ================= */
 function gvizUrl(gid: string, range: string): string {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}&range=${encodeURIComponent(range)}`;
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}&range=${encodeURIComponent(
+    range
+  )}`;
 }
 
-function parseGviz(text) {
-  const prefix = "/*O_o*/";
-  const start = text.indexOf(prefix);
-  if (start === -1) throw new Error("Unexpected GViz response");
-  // ใช้ Logic ตัดคำตามเดิม
-  const jsonStr = text.substring(start + 47, text.length - 2);
+/**
+ * GViz response จะมี prefix แปลก ๆ ก่อน JSON
+ * วิธีที่ทนสุด: หา substring ก้อน JSON ตั้งแต่ { ... } ก้อนสุดท้าย
+ */
+function parseGviz(text: string): GvizTable | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1) return null;
   try {
-    const json = JSON.parse(jsonStr);
-    return json?.table;
-  } catch (e) {
-    console.error("JSON Parse Error:", e);
+    const json = JSON.parse(text.slice(start, end + 1));
+    return json?.table ?? null;
+  } catch {
     return null;
   }
 }
 
-const normalizeNumerals = (s) =>
+const normalizeNumerals = (s: unknown): string =>
   String(s)
-    .replace(/๐/g, "0").replace(/๑/g, "1").replace(/๒/g, "2")
-    .replace(/๓/g, "3").replace(/๔/g, "4").replace(/๕/g, "5")
-    .replace(/๖/g, "6").replace(/๗/g, "7").replace(/๘/g, "8")
+    .replace(/๐/g, "0")
+    .replace(/๑/g, "1")
+    .replace(/๒/g, "2")
+    .replace(/๓/g, "3")
+    .replace(/๔/g, "4")
+    .replace(/๕/g, "5")
+    .replace(/๖/g, "6")
+    .replace(/๗/g, "7")
+    .replace(/๘/g, "8")
     .replace(/๙/g, "9");
 
-function toNumber(raw) {
+function toNumber(raw: unknown): number | null {
   if (raw == null) return null;
-  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
-  const cleaned = normalizeNumerals(String(raw)).replace(/[^0-9.\-]/g, "");
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  const cleaned = normalizeNumerals(raw).replace(/[^0-9.-]/g, "");
   const num = Number(cleaned);
   return Number.isFinite(num) ? num : null;
 }
 
-// --- COMPONENTS ---
-
-const Sidebar = ({ isOpen, toggleSidebar, activeMenu, setActiveMenu }) => {
-  const menuItems = [
-    { id: 'dashboard', label: 'ภาพรวม (Dashboard)', icon: LayoutDashboard },
-    { id: 'inventory', label: 'ข้อมูลรายชนิด', icon: Trees },
-    { id: 'map', label: 'แผนที่ Google Earth', icon: Map },
-    { id: 'settings', label: 'ตั้งค่าระบบ', icon: Settings },
-  ];
+/* ================= COMPONENTS ================= */
+const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  toggleSidebar,
+  activeMenu,
+  setActiveMenu,
+}) => {
+  const menuItems: { id: MenuId; label: string; icon: React.ComponentType<any> }[] =
+    [
+      { id: "dashboard", label: "ภาพรวม", icon: Trees },
+      { id: "inventory", label: "ข้อมูลรายชนิด", icon: Layers },
+      { id: "map", label: "แผนที่", icon: Map },
+      { id: "settings", label: "ตั้งค่า", icon: Activity },
+    ];
 
   return (
     <>
-      {isOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={toggleSidebar} />}
-      <aside className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r border-gray-100 z-30 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <Sprout size={24} />
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-20 md:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
+      <aside
+        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r z-30 transition-transform ${
+          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="p-6 flex gap-3 items-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+            <Sprout size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-xl text-gray-800 tracking-tight">CNMI Tree</h1>
-            <p className="text-xs text-gray-500">Live Inventory</p>
+            <div className="font-bold leading-tight">CNMI Tree</div>
+            <div className="text-xs text-gray-400">Live Inventory</div>
           </div>
         </div>
-        <nav className="mt-6 px-3 space-y-1">
-          {menuItems.map((item) => (
+
+        <nav className="px-3 space-y-1">
+          {menuItems.map((m) => (
             <button
-              key={item.id}
-              onClick={() => setActiveMenu(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${activeMenu === item.id ? 'bg-emerald-50 text-emerald-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+              key={m.id}
+              onClick={() => setActiveMenu(m.id)}
+              className={`w-full flex gap-3 px-4 py-2 rounded-lg text-sm ${
+                activeMenu === m.id
+                  ? "bg-emerald-50 text-emerald-700 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
             >
-              <item.icon size={20} className={activeMenu === item.id ? 'text-emerald-500' : 'text-gray-400'} />
-              {item.label}
+              <m.icon size={18} />
+              {m.label}
             </button>
           ))}
         </nav>
@@ -81,35 +154,34 @@ const Sidebar = ({ isOpen, toggleSidebar, activeMenu, setActiveMenu }) => {
   );
 };
 
-const StatCard = ({ title, value, unit, subtext, icon: Icon, colorClass, loading }) => (
-  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 flex flex-col justify-between">
-    <div>
-      <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10`}>
-          <Icon size={24} className={colorClass.replace('bg-', 'text-')} />
-        </div>
-      </div>
-      <h3 className="text-gray-500 text-sm font-medium mb-1">{title}</h3>
-      <div className="flex items-baseline gap-2">
-        {loading ? (
-          <div className="h-9 w-24 bg-gray-200 animate-pulse rounded-lg"></div>
-        ) : (
-          <p className="text-3xl font-bold text-gray-800 animate-in fade-in">{value != null ? value.toLocaleString() : '-'}</p>
-        )}
-        <span className="text-sm text-gray-400 font-medium">{unit}</span>
-      </div>
-      <p className="text-xs text-gray-400 mt-1">{subtext}</p>
+const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  unit,
+  subtext,
+  icon: Icon,
+  colorClass,
+  loading,
+}) => (
+  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+    <div className="flex items-center gap-2 mb-2">
+      <Icon size={18} className={colorClass} />
+      <div className="text-sm text-gray-500">{title}</div>
     </div>
+    <div className="text-2xl font-bold text-gray-800">
+      {loading ? "-" : value?.toLocaleString() ?? "-"}{" "}
+      <span className="text-sm font-medium text-gray-400">{unit}</span>
+    </div>
+    <div className="text-xs text-gray-400 mt-1">{subtext}</div>
   </div>
 );
 
-// --- MAIN LOGIC ---
+/* ================= MAIN ================= */
+const DashboardContent: React.FC = () => {
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-const DashboardContent = () => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState('-');
-  const [data, setData] = useState({
+  const [data, setData] = useState<DashboardData>({
     totalCount: null,
     measured: null,
     totalCO2eTon: null,
@@ -118,56 +190,53 @@ const DashboardContent = () => {
     topSpeciesName: null,
     topSpeciesCount: null,
   });
-  const [species, setSpecies] = useState([]);
+
+  const [species, setSpecies] = useState<SpeciesRow[]>([]);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError(null);
     try {
-      // 1) ดึงข้อมูล KPI จาก A3:Z3
-      const rowUrl = gvizUrl(GID_SUMMARY, "A3:Z3");
-      const rowTxt = await fetch(rowUrl).then(r => r.text());
-      const rowTable = parseGviz(rowTxt);
-      const row = rowTable?.rows?.[0];
+      setError(null);
+      setLoading(true);
 
-      if (!row) throw new Error("ไม่พบข้อมูลในแถว A3:Z3");
+      // KPI row A3:Z3
+      const rowTxt = await fetch(gvizUrl(GID_SUMMARY, "A3:Z3")).then((r) =>
+        r.text()
+      );
+      const table = parseGviz(rowTxt);
+      const row = table?.rows?.[0];
+      if (!row) throw new Error("ไม่พบข้อมูลใน Summary!A3:Z3");
 
-      const getCell = (i) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
-      
-      const cellH3 = getCell(7);
-      const H3name = cellH3 == null ? null : typeof cellH3 === "string" ? cellH3 : String(cellH3);
+      const getCell = (i: number) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
 
       setData({
-        totalCount: toNumber(getCell(0)), // A3
-        measured: toNumber(getCell(1)),   // B3
-        totalCO2eTon: toNumber(getCell(2)), // C3
-        avgDBHcm: toNumber(getCell(3)),    // D3
-        avgPerTreeKg: toNumber(getCell(4)), // E3
-        topSpeciesName: H3name, // H3
-        topSpeciesCount: toNumber(getCell(8)), // I3
+        totalCount: toNumber(getCell(0)),
+        measured: toNumber(getCell(1)),
+        totalCO2eTon: toNumber(getCell(2)),
+        avgDBHcm: toNumber(getCell(3)),
+        avgPerTreeKg: toNumber(getCell(4)),
+        topSpeciesName:
+          getCell(7) == null ? null : String(getCell(7)).trim() || null,
+        topSpeciesCount: toNumber(getCell(8)),
       });
 
-      // 2) ดึงข้อมูลพันธุ์ไม้จาก H8:I
-      const spUrl = gvizUrl(GID_SUMMARY, SPECIES_RANGE);
-      const spTxt = await fetch(spUrl).then(r => r.text());
+      // Species table H8:I
+      const spTxt = await fetch(gvizUrl(GID_SUMMARY, SPECIES_RANGE)).then((r) =>
+        r.text()
+      );
       const spTable = parseGviz(spTxt);
-      
-      const rows = (spTable?.rows ?? [])
-        .map(r => {
-          const nameRaw = r?.c?.[0]?.v ?? r?.c?.[0]?.f ?? "";
-          const cntRaw = r?.c?.[1]?.v ?? r?.c?.[1]?.f ?? null;
-          const name = String(nameRaw).trim();
-          const count = toNumber(cntRaw);
+
+      const rows: SpeciesRow[] = (spTable?.rows ?? [])
+        .map((r: GvizRow) => {
+          const name = String(r.c?.[0]?.v ?? r.c?.[0]?.f ?? "").trim();
+          const count = toNumber(r.c?.[1]?.v ?? r.c?.[1]?.f);
           return name && count != null ? { name, count } : null;
         })
-        .filter(Boolean)
+        .filter((x): x is SpeciesRow => x !== null)
         .sort((a, b) => b.count - a.count);
 
       setSpecies(rows);
-      setLastUpdated(new Date().toLocaleTimeString('th-TH'));
     } catch (e) {
-      console.error("Fetch Error:", e);
-      setError("ไม่สามารถดึงข้อมูลได้: " + e.message);
+      setError(e instanceof Error ? e.message : "ไม่สามารถโหลดข้อมูลได้");
     } finally {
       setLoading(false);
     }
@@ -175,235 +244,124 @@ const DashboardContent = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 300000); 
-    return () => clearInterval(interval);
   }, []);
 
-  // Top 5 Species
-  const topSpecies = species.slice(0, 5);
-  const maxCount = species.length > 0 ? species[0].count : 1;
-  const chartColors = ['bg-yellow-400', 'bg-purple-400', 'bg-red-400', 'bg-orange-400', 'bg-emerald-400'];
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+        <AlertCircle size={18} />
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">ข้อมูลไม้ยืนต้นภายในสถาบันฯ</h2>
-          <div className="flex items-center gap-2 text-gray-500 text-sm mt-1">
-            <span>อัปเดตล่าสุด: {lastUpdated}</span>
-            {loading && <span className="text-emerald-500 animate-pulse">(กำลังโหลด...)</span>}
-          </div>
-        </div>
-        <button 
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="font-bold text-gray-800">Dashboard</div>
+        <button
           onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          className="text-sm px-3 py-2 rounded-lg bg-white border hover:bg-gray-50"
         >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          รีเฟรชข้อมูล
+          Refresh
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-          <AlertCircle size={18} />
-          {error}
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="จำนวนที่ตรวจนับได้" 
-          value={data.totalCount} 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard
+          title="จำนวนต้น"
+          value={data.totalCount}
           unit="ต้น"
-          subtext="เป้าหมายทั้งหมด 3,940 ต้น"
-          icon={Map}
-          colorClass="bg-blue-500 text-blue-500"
-          loading={loading}
-        />
-        <StatCard 
-          title="เก็บข้อมูลครบถ้วน" 
-          value={data.measured} 
-          unit="ต้น"
-          subtext="วัดความสูง, เรือนยอด, DBH แล้ว"
+          subtext="จำนวนที่ตรวจนับได้"
           icon={Trees}
-          colorClass="bg-emerald-500 text-emerald-500"
+          colorClass="text-emerald-600"
           loading={loading}
         />
-        <StatCard 
-          title="กักเก็บคาร์บอนรวม" 
-          value={data.totalCO2eTon} 
-          unit="ตัน CO₂e"
-          subtext={`เฉลี่ย ${data.avgPerTreeKg} กก./ต้น`}
+        <StatCard
+          title="CO₂ รวม"
+          value={data.totalCO2eTon}
+          unit="ตัน"
+          subtext="คาร์บอนสะสม"
           icon={Wind}
-          colorClass="bg-teal-500 text-teal-500"
-          loading={loading}
-        />
-        <StatCard 
-          title="DBH เฉลี่ย" 
-          value={data.avgDBHcm} 
-          unit="ซม."
-          subtext="ขนาดลำต้นเฉลี่ยในพื้นที่"
-          icon={Activity}
-          colorClass="bg-orange-500 text-orange-500"
+          colorClass="text-blue-600"
           loading={loading}
         />
       </div>
 
-      {/* Top Species Info Box (จาก H3) */}
-      {(data.topSpeciesName || data.topSpeciesCount != null) && (
-        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-100 p-4 rounded-xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-emerald-200 rounded-lg text-emerald-800"><Sprout size={20}/></div>
-             <div>
-                <p className="text-xs text-emerald-600 font-bold uppercase">พันธุ์ไม้ที่พบมากที่สุด</p>
-                <p className="text-lg font-bold text-gray-800">{data.topSpeciesName || '-'}</p>
-             </div>
-          </div>
-          <div className="text-right">
-             <p className="text-2xl font-bold text-emerald-600">{data.topSpeciesCount != null ? data.topSpeciesCount.toLocaleString() : '-'}</p>
-             <p className="text-xs text-emerald-500">ต้น</p>
-          </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b text-sm font-semibold text-gray-700">
+          พันธุ์ไม้ (Top 10)
         </div>
-      )}
-
-      {/* Charts & Tables Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Chart: Species Distribution */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                <PieChart size={20} className="text-emerald-500"/> 
-                สถิติพันธุ์ไม้ (5 อันดับแรก)
-              </h3>
-              <p className="text-xs text-gray-400">ดึงข้อมูลจาก Summary!H8:I</p>
-            </div>
-          </div>
-          
-          <div className="space-y-5">
-            {loading ? (
-               [1,2,3,4,5].map(i => <div key={i} className="h-4 bg-gray-100 rounded-full w-full animate-pulse"></div>)
-            ) : topSpecies.length > 0 ? (
-              topSpecies.map((tree, i) => (
-               <div key={i} className="group">
-                  <div className="flex justify-between text-sm mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 rounded-md ${chartColors[i % 5]}`}></span>
-                        <span className="font-medium text-gray-700">{i+1}. {tree.name}</span>
-                      </div>
-                      <span className="font-bold text-gray-900">{tree.count} ต้น</span>
-                  </div>
-                  <div className="w-full bg-gray-50 rounded-full h-3 overflow-hidden">
-                      <div 
-                          className={`h-3 rounded-full ${chartColors[i % 5]} transition-all duration-1000 ease-out group-hover:opacity-80`} 
-                          style={{ width: `${(tree.count / maxCount) * 100}%` }}
-                      ></div>
-                  </div>
-              </div>
-            ))
-            ) : (
-              <p className="text-center text-gray-400 py-10">{error ? 'โหลดข้อมูลไม่สำเร็จ' : 'ไม่พบข้อมูลพันธุ์ไม้'}</p>
-            )}
-          </div>
+        <div className="max-h-[320px] overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white">
+              <tr className="text-gray-500">
+                <th className="text-left px-4 py-2">ชื่อ</th>
+                <th className="text-right px-4 py-2">จำนวน</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {(loading ? [] : species.slice(0, 10)).map((r, i) => (
+                <tr key={i} className="hover:bg-gray-50">
+                  <td className="px-4 py-2">{r.name}</td>
+                  <td className="px-4 py-2 text-right font-mono">
+                    {r.count.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+              {!loading && species.length === 0 && (
+                <tr>
+                  <td className="px-4 py-4 text-gray-400" colSpan={2}>
+                    ไม่พบข้อมูลพันธุ์ไม้
+                  </td>
+                </tr>
+              )}
+              {loading && (
+                <tr>
+                  <td className="px-4 py-4 text-gray-400" colSpan={2}>
+                    กำลังโหลด...
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-
-        {/* Detailed List Table */}
-        <div className="bg-white p-0 rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-gray-50 bg-gray-50/30">
-             <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                <Layers size={20} className="text-blue-500"/>
-                รายละเอียด
-             </h3>
-             <p className="text-xs text-gray-400">รายการพันธุ์ไม้ทั้งหมด</p>
-          </div>
-          <div className="flex-1 overflow-y-auto max-h-[400px]">
-             <table className="w-full text-left border-collapse">
-               <thead className="sticky top-0 bg-white shadow-sm z-10">
-                 <tr className="text-xs text-gray-500 uppercase tracking-wider">
-                   <th className="p-4 font-semibold border-b border-gray-100">ชื่อพันธุ์ไม้</th>
-                   <th className="p-4 font-semibold border-b border-gray-100 text-right">จำนวน</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-50 text-sm">
-                 {loading ? (
-                    <tr><td colSpan="2" className="p-4 text-center text-gray-400">กำลังโหลด...</td></tr>
-                 ) : species.map((row, i) => (
-                   <tr key={i} className="hover:bg-emerald-50/50 transition-colors">
-                     <td className="p-3 px-4 font-medium text-gray-700 border-l-4 border-transparent hover:border-emerald-400">
-                        {row.name}
-                     </td>
-                     <td className="p-3 px-4 text-right text-gray-600 font-mono">
-                        {row.count.toLocaleString()}
-                     </td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-          </div>
-        </div>
-
       </div>
     </div>
   );
 };
 
-// --- APP SHELL ---
-
-function App() {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+/* ================= APP ================= */
+const App: React.FC = () => {
+  const [activeMenu, setActiveMenu] = useState<MenuId>("dashboard");
+  const [open, setOpen] = useState<boolean>(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans selection:bg-emerald-100 selection:text-emerald-900">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Prompt', sans-serif; }
-      `}</style>
-
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+    <div className="min-h-screen bg-gray-50">
+      <Sidebar
+        isOpen={open}
+        toggleSidebar={() => setOpen(!open)}
         activeMenu={activeMenu}
         setActiveMenu={setActiveMenu}
       />
 
-      <div className="md:ml-64 min-h-screen flex flex-col transition-all duration-300">
-        {/* Top Navbar */}
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-              <Menu size={20} />
-            </button>
-            <h2 className="text-lg font-bold text-gray-800 hidden md:block">CNMI Green Area Management</h2>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-               <p className="text-sm font-bold text-gray-700">Admin User</p>
-               <p className="text-xs text-emerald-600">Assets & Environment</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm shadow-sm border border-emerald-200">
-              A
-            </div>
-          </div>
-        </header>
+      <main className="md:ml-64 p-6">
+        <button
+          onClick={() => setOpen(!open)}
+          className="md:hidden mb-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border"
+        >
+          <Menu size={18} />
+          เมนู
+        </button>
 
-        {/* Content Area */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-          {activeMenu === 'dashboard' ? <DashboardContent /> : (
-             <div className="flex flex-col items-center justify-center h-[60vh] text-center text-gray-400">
-              <Trees size={64} className="text-gray-200 mb-4" />
-              <h3 className="text-xl font-bold text-gray-600">หน้า {activeMenu}</h3>
-              <p>ส่วนนี้ยังไม่เปิดใช้งาน (สามารถเพิ่ม Logic ได้ในภายหลัง)</p>
-            </div>
-          )}
-        </main>
-      </div>
+        {activeMenu === "dashboard" ? (
+          <DashboardContent />
+        ) : (
+          <div className="text-gray-400">หน้านี้ยังไม่ได้ทำ</div>
+        )}
+      </main>
     </div>
   );
-}
+};
 
 export default App;
