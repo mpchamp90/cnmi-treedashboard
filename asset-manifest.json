@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/cnmi-treedashboard/static/css/main.f07f551d.css",
+    "main.js": "/cnmi-treedashboard/static/js/main.adcb5297.js",
+    "index.html": "/cnmi-treedashboard/index.html",
+    "main.f07f551d.css.map": "/cnmi-treedashboard/static/css/main.f07f551d.css.map",
+    "main.adcb5297.js.map": "/cnmi-treedashboard/static/js/main.adcb5297.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.f07f551d.css",
+    "static/js/main.adcb5297.js"
+  ]
+}
