@@ -7,7 +7,7 @@ const GID_SUMMARY = "1289823245"; // หน้า Summary
 const SPECIES_RANGE = "H8:I"; // ตารางชนิดพันธุ์ไม้ (H=ชื่อ, I=จำนวน)
 
 // --- UTILITIES (Logic จากโค้ดเดิมของคุณ) ---
-function gvizUrl(gid, range) {
+function gvizUrl(gid: string, range: string): string {
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}&range=${encodeURIComponent(range)}`;
 }
 
