@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Map, Sprout, Activity, Settings, Trees, Wind, PieChart, RefreshCw, Menu, BarChart3, Layers } from 'lucide-react';
+import { LayoutDashboard, Map, Sprout, Activity, Settings, Trees, Wind, PieChart, RefreshCw, Menu, BarChart3, Layers, AlertCircle } from 'lucide-react';
 
 // --- CONFIGURATION ---
 const SHEET_ID = "1JRPKppFO8s41gTIM26xZLojsaij-eQG2qo-mhwAg1qg";
@@ -14,11 +14,14 @@ function gvizUrl(gid, range) {
 function parseGviz(text) {
   const prefix = "/*O_o*/";
   const start = text.indexOf(prefix);
-  if (start === -1) return null;
+  if (start === -1) throw new Error("Unexpected GViz response");
+  // ใช้ Logic ตัดคำตามเดิม
   const jsonStr = text.substring(start + 47, text.length - 2);
   try {
-    return JSON.parse(jsonStr)?.table;
+    const json = JSON.parse(jsonStr);
+    return json?.table;
   } catch (e) {
+    console.error("JSON Parse Error:", e);
     return null;
   }
 }
@@ -104,6 +107,7 @@ const StatCard = ({ title, value, unit, subtext, icon: Icon, colorClass, loading
 
 const DashboardContent = () => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState('-');
   const [data, setData] = useState({
     totalCount: null,
@@ -118,6 +122,7 @@ const DashboardContent = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setError(null);
     try {
       // 1) ดึงข้อมูล KPI จาก A3:Z3
       const rowUrl = gvizUrl(GID_SUMMARY, "A3:Z3");
@@ -125,19 +130,22 @@ const DashboardContent = () => {
       const rowTable = parseGviz(rowTxt);
       const row = rowTable?.rows?.[0];
 
-      if (row) {
-        const getCell = (i) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
-        
-        setData({
-          totalCount: toNumber(getCell(0)), // A3
-          measured: toNumber(getCell(1)),   // B3
-          totalCO2eTon: toNumber(getCell(2)), // C3
-          avgDBHcm: toNumber(getCell(3)),    // D3
-          avgPerTreeKg: toNumber(getCell(4)), // E3
-          topSpeciesName: String(getCell(7) || '-'), // H3
-          topSpeciesCount: toNumber(getCell(8)),     // I3
-        });
-      }
+      if (!row) throw new Error("ไม่พบข้อมูลในแถว A3:Z3");
+
+      const getCell = (i) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
+      
+      const cellH3 = getCell(7);
+      const H3name = cellH3 == null ? null : typeof cellH3 === "string" ? cellH3 : String(cellH3);
+
+      setData({
+        totalCount: toNumber(getCell(0)), // A3
+        measured: toNumber(getCell(1)),   // B3
+        totalCO2eTon: toNumber(getCell(2)), // C3
+        avgDBHcm: toNumber(getCell(3)),    // D3
+        avgPerTreeKg: toNumber(getCell(4)), // E3
+        topSpeciesName: H3name, // H3
+        topSpeciesCount: toNumber(getCell(8)), // I3
+      });
 
       // 2) ดึงข้อมูลพันธุ์ไม้จาก H8:I
       const spUrl = gvizUrl(GID_SUMMARY, SPECIES_RANGE);
@@ -146,8 +154,10 @@ const DashboardContent = () => {
       
       const rows = (spTable?.rows ?? [])
         .map(r => {
-          const name = String(r?.c?.[0]?.v ?? r?.c?.[0]?.f ?? "").trim();
-          const count = toNumber(r?.c?.[1]?.v ?? r?.c?.[1]?.f);
+          const nameRaw = r?.c?.[0]?.v ?? r?.c?.[0]?.f ?? "";
+          const cntRaw = r?.c?.[1]?.v ?? r?.c?.[1]?.f ?? null;
+          const name = String(nameRaw).trim();
+          const count = toNumber(cntRaw);
           return name && count != null ? { name, count } : null;
         })
         .filter(Boolean)
@@ -157,6 +167,7 @@ const DashboardContent = () => {
       setLastUpdated(new Date().toLocaleTimeString('th-TH'));
     } catch (e) {
       console.error("Fetch Error:", e);
+      setError("ไม่สามารถดึงข้อมูลได้: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -164,16 +175,13 @@ const DashboardContent = () => {
 
   useEffect(() => {
     fetchData();
-    // ตั้งเวลา refresh อัตโนมัติทุก 5 นาที (ถ้าต้องการ)
     const interval = setInterval(fetchData, 300000); 
     return () => clearInterval(interval);
   }, []);
 
   // Top 5 Species
   const topSpecies = species.slice(0, 5);
-  // Max count for chart scaling
   const maxCount = species.length > 0 ? species[0].count : 1;
-
   const chartColors = ['bg-yellow-400', 'bg-purple-400', 'bg-red-400', 'bg-orange-400', 'bg-emerald-400'];
 
   return (
@@ -195,6 +203,14 @@ const DashboardContent = () => {
           รีเฟรชข้อมูล
         </button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+          <AlertCircle size={18} />
+          {error}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -236,18 +252,18 @@ const DashboardContent = () => {
         />
       </div>
 
-      {/* Top Species Info Box */}
-      {data.topSpeciesName && (
+      {/* Top Species Info Box (จาก H3) */}
+      {(data.topSpeciesName || data.topSpeciesCount != null) && (
         <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-100 p-4 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-emerald-200 rounded-lg text-emerald-800"><Sprout size={20}/></div>
              <div>
                 <p className="text-xs text-emerald-600 font-bold uppercase">พันธุ์ไม้ที่พบมากที่สุด</p>
-                <p className="text-lg font-bold text-gray-800">{data.topSpeciesName}</p>
+                <p className="text-lg font-bold text-gray-800">{data.topSpeciesName || '-'}</p>
              </div>
           </div>
           <div className="text-right">
-             <p className="text-2xl font-bold text-emerald-600">{data.topSpeciesCount}</p>
+             <p className="text-2xl font-bold text-emerald-600">{data.topSpeciesCount != null ? data.topSpeciesCount.toLocaleString() : '-'}</p>
              <p className="text-xs text-emerald-500">ต้น</p>
           </div>
         </div>
@@ -270,7 +286,6 @@ const DashboardContent = () => {
           
           <div className="space-y-5">
             {loading ? (
-               // Skeleton loader for chart
                [1,2,3,4,5].map(i => <div key={i} className="h-4 bg-gray-100 rounded-full w-full animate-pulse"></div>)
             ) : topSpecies.length > 0 ? (
               topSpecies.map((tree, i) => (
@@ -291,7 +306,7 @@ const DashboardContent = () => {
               </div>
             ))
             ) : (
-              <p className="text-center text-gray-400 py-10">ไม่พบข้อมูลพันธุ์ไม้</p>
+              <p className="text-center text-gray-400 py-10">{error ? 'โหลดข้อมูลไม่สำเร็จ' : 'ไม่พบข้อมูลพันธุ์ไม้'}</p>
             )}
           </div>
         </div>
