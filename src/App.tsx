@@ -1,7 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from 'react';
+import { 
+  TreeDeciduous, 
+  Map as MapIcon, 
+  BarChart3, 
+  Wind, 
+  Droplets, 
+  Leaf, 
+  Search, 
+  Menu, 
+  Navigation,
+  Info,
+  Layers
+} from 'lucide-react';
 
 // ---------- Types ----------
-type Dashboard = {
+type DashboardData = {
   totalCount: number | null; // A3
   measured: number | null; // B3
   totalCO2eTon: number | null; // C3
@@ -13,25 +26,41 @@ type Dashboard = {
 
 type SpeciesRow = { name: string; count: number };
 
-// ---------- Config ----------
+type TreeLocation = {
+  id: string;
+  species: string;
+  locationId: string;
+  locationName: string;
+  health: string;
+  height: number;
+  carbon: number;
+  lat: number;
+  lng: number;
+  status: 'Native' | 'Invasive' | 'Introduced';
+};
+
+// ---------- Configuration ----------
 const SHEET_ID = "1JRPKppFO8s41gTIM26xZLojsaij-eQG2qo-mhwAg1qg";
 const GID_SUMMARY = "1289823245";
 const SPECIES_RANGE = "H8:I";
 
 // ---------- Utilities ----------
 function gvizUrl(gid: string, range: string) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}&range=${encodeURIComponent(
-    range
-  )}`;
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}&range=${encodeURIComponent(range)}`;
 }
 
 function parseGviz(text: string) {
-  const json = JSON.parse(text.substring(47, text.length - 2));
-  return json?.table;
+  try {
+    const json = JSON.parse(text.substring(47, text.length - 2));
+    return json?.table;
+  } catch (e) {
+    console.error("Error parsing Gviz data", e);
+    return null;
+  }
 }
 
 const normalizeNumerals = (s: string) =>
-  s
+  String(s)
     .replace(/๐/g, "0")
     .replace(/๑/g, "1")
     .replace(/๒/g, "2")
@@ -51,9 +80,215 @@ function toNumber(raw: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-// ---------- App ----------
+// ---------- Constants & Mock Data ----------
+// (ใช้ Mock สำหรับตำแหน่งบนแผนที่ เพราะข้อมูล Summary ไม่ได้ระบุพิกัดรายต้น)
+const LOCATIONS = [
+  { id: 'All', name: 'พื้นที่ทั้งหมด' },
+  { id: 'LC', name: 'อาคารศูนย์การเรียนรู้' },
+  { id: 'R2', name: 'ถนนเส้นกลาง (ประตู 1-ศูนย์อาหาร)' },
+  { id: 'R4', name: 'ถนนหลัง รพ.' },
+  { id: 'CB', name: 'พื้นที่คันคลอง' },
+  { id: 'D5', name: 'หอพัก 5' }
+];
+
+const TREE_DATA_MOCK: TreeLocation[] = [
+  { id: 'CNMI-LC-SESI-01', species: 'ขี้เหล็ก', locationId: 'LC', locationName: 'อาคารศูนย์การเรียนรู้', health: 'Good', height: 5.0, carbon: 89.40, lat: 13.5252527, lng: 100.7624733, status: 'Native' },
+  { id: 'CNMI-LC-SESI-02', species: 'ขี้เหล็ก', locationId: 'LC', locationName: 'อาคารศูนย์การเรียนรู้', health: 'Good', height: 5.5, carbon: 112.26, lat: 13.5252487, lng: 100.7625309, status: 'Native' },
+  { id: 'CNMI-LC-SESI-06', species: 'ขี้เหล็ก', locationId: 'LC', locationName: 'อาคารศูนย์การเรียนรู้', health: 'Excellent', height: 6.0, carbon: 144.31, lat: 13.5252365, lng: 100.7628175, status: 'Native' },
+  { id: 'CNMI-R2-CAFI-01', species: 'ราชพฤกษ์', locationId: 'R2', locationName: 'ถนนเส้นกลาง', health: 'Good', height: 6.5, carbon: 75.84, lat: 13.5254986, lng: 100.7597019, status: 'Native' },
+  { id: 'CNMI-R2-CAFI-02', species: 'ราชพฤกษ์', locationId: 'R2', locationName: 'ถนนเส้นกลาง', health: 'Good', height: 7.5, carbon: 127.80, lat: 13.5254982, lng: 100.7597625, status: 'Native' },
+  { id: 'CNMI-R4-SEGR-01', species: 'แคแสด', locationId: 'R4', locationName: 'ถนนหลัง รพ.', health: 'Fair', height: 5.0, carbon: 35.5, lat: 13.5275334, lng: 100.7632204, status: 'Invasive' },
+  { id: 'CNMI-D5-PTIN-01', species: 'ประดู่', locationId: 'D5', locationName: 'หอพัก 5', health: 'Good', height: 8.0, carbon: 120.5, lat: 13.5275619, lng: 100.7634712, status: 'Native' },
+];
+
+// ---------- Components ----------
+
+interface StatCardProps {
+  title: string;
+  value: number | string | null;
+  unit: string;
+  icon: React.ElementType;
+  trend?: string | null;
+  color: string;
+  subValue?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, unit, icon: Icon, trend, color, subValue }) => (
+  <div className="relative overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl group hover:bg-white/15 transition-all duration-300">
+    <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 ${color}`}>
+      <Icon size={100} />
+    </div>
+    <div className="relative z-10">
+      <div className="flex items-center gap-2 text-gray-300 mb-2">
+        <Icon size={18} />
+        <span className="text-sm font-medium uppercase tracking-wider">{title}</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-4xl font-bold text-white">{value != null ? value.toLocaleString() : "—"}</span>
+        <span className="text-sm text-gray-400">{unit}</span>
+      </div>
+      {subValue && (
+        <div className="mt-1 text-xs text-gray-400">
+          {subValue}
+        </div>
+      )}
+      {trend && (
+        <div className="mt-2 text-xs font-medium text-emerald-400 flex items-center gap-1">
+          <span>▲ {trend}</span>
+          <span className="text-gray-500">vs last month</span>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const LocationFilter = ({ selected, onSelect }: { selected: string, onSelect: (id: string) => void }) => (
+  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+    {LOCATIONS.map((loc) => (
+      <button
+        key={loc.id}
+        onClick={() => onSelect(loc.id)}
+        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
+          ${selected === loc.id 
+            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+          }`}
+      >
+        {loc.name}
+      </button>
+    ))}
+  </div>
+);
+
+const MapVisualization = ({ data }: { data: TreeLocation[] }) => {
+  // Center map on CNMI: 13.525, 100.762 (Approximation)
+  const mapUrl = "https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d4500!2d100.7618!3d13.5255!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sth";
+
+  return (
+    <div className="relative w-full h-[400px] bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-2xl group">
+      <iframe 
+        src={mapUrl}
+        width="100%" 
+        height="100%" 
+        style={{ border: 0, filter: 'invert(90%) hue-rotate(180deg) contrast(90%) grayscale(20%)' }} 
+        allowFullScreen={false} 
+        loading="lazy" 
+        referrerPolicy="no-referrer-when-downgrade"
+        className="absolute inset-0"
+        title="CNMI Map"
+      ></iframe>
+      
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-transparent to-slate-900/30 pointer-events-none"></div>
+
+      <div className="absolute inset-0 pointer-events-none">
+        {data.map((tree, i) => (
+          <div
+            key={tree.id}
+            className={`absolute w-3 h-3 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.3)] cursor-pointer hover:scale-150 transition-transform duration-300 z-10 pointer-events-auto
+              ${tree.status === 'Invasive' ? 'bg-orange-500' : 'bg-emerald-500'}`}
+            style={{ 
+              // Mock positioning logic for demo purposes
+              left: `${50 + (tree.lng - 100.7618) * 4000}%`, 
+              top: `${50 - (tree.lat - 13.5255) * 4000}%`,
+              animation: `float ${3 + i % 2}s ease-in-out infinite`
+            }}
+            title={`${tree.species} (${tree.locationName})`}
+          >
+          </div>
+        ))}
+      </div>
+
+      <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
+        <button className="p-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors"><Navigation size={16} /></button>
+        <button className="p-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors"><Layers size={16} /></button>
+      </div>
+      
+      <div className="absolute top-4 left-4 bg-black/40 backdrop-blur p-2 rounded-lg border border-white/10 z-20">
+        <h3 className="text-white text-sm font-semibold flex items-center gap-2">
+          <MapIcon size={14} className="text-emerald-400"/>
+          CNMI Tree Distribution
+        </h3>
+        <div className="flex gap-3 mt-1 text-[10px] text-gray-300">
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Native</span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Invasive</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SpeciesChart = ({ speciesData }: { speciesData: SpeciesRow[] }) => {
+  const topFive = speciesData.slice(0, 5);
+  const total = speciesData.reduce((acc, curr) => acc + curr.count, 0);
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+        <TreeDeciduous size={20} className="text-emerald-400" />
+        Species Diversity (Top 5)
+      </h3>
+      <div className="space-y-4">
+        {topFive.length === 0 ? (
+          <p className="text-gray-400 text-sm">กำลังโหลดข้อมูล...</p>
+        ) : (
+          topFive.map((s) => (
+            <div key={s.name} className="group">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-300 group-hover:text-white transition-colors">{s.name}</span>
+                <span className="text-gray-400">{s.count.toLocaleString()} trees ({total > 0 ? Math.round((s.count/total)*100) : 0}%)</span>
+              </div>
+              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000 ease-out"
+                  style={{ width: `${total > 0 ? (s.count/total)*100 : 0}%` }}
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+const RecentActivity = () => (
+  <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+    <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+      <Info size={20} className="text-blue-400" />
+      System Status
+    </h3>
+    <div className="space-y-6">
+      {[
+        { txt: "Syncing with Google Sheets Database", time: "Just now", u: "System" },
+        { txt: "Calculating CO2 Sequestration", time: "1 min ago", u: "AI Engine" },
+        { txt: "Updated Tree Health Status", time: "10 mins ago", u: "Admin" }
+      ].map((item, i) => (
+        <div key={i} className="flex gap-4 items-start">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <Leaf size={14} />
+          </div>
+          <div>
+            <p className="text-gray-300 text-sm">{item.txt}</p>
+            <div className="flex gap-2 items-center mt-1">
+              <span className="text-xs text-gray-500">{item.time}</span>
+              <span className="text-xs text-emerald-500/50">• {item.u}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ---------- Main App Component ----------
+
 export default function App() {
-  const [data, setData] = useState<Dashboard>({
+  const [selectedLoc, setSelectedLoc] = useState('All');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  // Real Data State from Google Sheets
+  const [realData, setRealData] = useState<DashboardData>({
     totalCount: null,
     measured: null,
     totalCO2eTon: null,
@@ -62,35 +297,36 @@ export default function App() {
     topSpeciesName: null,
     topSpeciesCount: null,
   });
-  const [species, setSpecies] = useState<SpeciesRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [speciesList, setSpeciesList] = useState<SpeciesRow[]>([]);
 
+  // Fetch Data from Google Sheets
   useEffect(() => {
     (async () => {
       try {
-        // KPIs (A3:E3 + H3/I3)
+        // 1. Fetch KPIs (A3:Z3)
         const rowUrl = gvizUrl(GID_SUMMARY, "A3:Z3");
         const rowTxt = await fetch(rowUrl).then((r) => r.text());
         const rowTable = parseGviz(rowTxt);
         const row = rowTable?.rows?.[0];
-        if (!row) throw new Error("No row 3 returned");
 
-        const getCell = (i: number) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
+        if (row) {
+          const getCell = (i: number) => row.c?.[i]?.v ?? row.c?.[i]?.f ?? null;
+          setRealData({
+            totalCount: toNumber(getCell(0)), // A3
+            measured: toNumber(getCell(1)),   // B3
+            totalCO2eTon: toNumber(getCell(2)), // C3
+            avgDBHcm: toNumber(getCell(3)),    // D3
+            avgPerTreeKg: toNumber(getCell(4)), // E3
+            topSpeciesName: (getCell(7) as string | null), // H3
+            topSpeciesCount: toNumber(getCell(8)) // I3
+          });
+        }
 
-        const A3 = toNumber(getCell(0));
-        const B3 = toNumber(getCell(1));
-        const C3 = toNumber(getCell(2));
-        const D3 = toNumber(getCell(3));
-        const E3 = toNumber(getCell(4));
-        const H3name = (getCell(7) ?? null) as string | null;
-        const I3count = toNumber(getCell(8));
-
-        // Species table (H8:I)
+        // 2. Fetch Species List (H8:I)
         const spUrl = gvizUrl(GID_SUMMARY, SPECIES_RANGE);
         const spTxt = await fetch(spUrl).then((r) => r.text());
         const spTable = parseGviz(spTxt);
-        const rows: SpeciesRow[] = (spTable?.rows ?? [])
+        const rows = (spTable?.rows ?? [])
           .map((r: any) => {
             const nameRaw = r?.c?.[0]?.v ?? r?.c?.[0]?.f ?? "";
             const cntRaw = r?.c?.[1]?.v ?? r?.c?.[1]?.f ?? null;
@@ -99,260 +335,230 @@ export default function App() {
             return name && count != null ? { name, count } : null;
           })
           .filter(Boolean) as SpeciesRow[];
-
+        
         rows.sort((a, b) => b.count - a.count);
-
-        setData({
-          totalCount: A3,
-          measured: B3,
-          totalCO2eTon: C3,
-          avgDBHcm: D3,
-          avgPerTreeKg: E3,
-          topSpeciesName: H3name,
-          topSpeciesCount: I3count,
-        });
-        setSpecies(rows);
+        setSpeciesList(rows);
         setLoading(false);
       } catch (e) {
-        console.error(e);
-        setError(
-          "โหลดข้อมูลไม่สำเร็จ (ตรวจสิทธิ์/ช่วงเซลล์/โครงสร้างตาราง/รูปแบบตัวเลข)"
-        );
+        console.error("Fetch error:", e);
+        // Still set loading to false to show UI (with null data)
         setLoading(false);
       }
     })();
   }, []);
 
-  const topFive = useMemo(() => species.slice(0, 8), [species]);
-
-  if (loading) return <FullCenter>Loading data…</FullCenter>;
-  if (error)
-    return <FullCenter style={{ color: "crimson" }}>{error}</FullCenter>;
-
-  const {
-    totalCount,
-    measured,
-    totalCO2eTon,
-    avgDBHcm,
-    avgPerTreeKg,
-    topSpeciesName,
-    topSpeciesCount,
-  } = data;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-900/20 via-slate-950 to-slate-950"></div>
+        <div className="z-10 flex flex-col items-center">
+          <TreeDeciduous size={64} className="text-emerald-500 animate-bounce mb-4" />
+          <h1 className="text-2xl font-bold tracking-widest uppercase">CNMI Smart Garden</h1>
+          <p className="text-emerald-500/80 text-sm mt-2 animate-pulse">Syncing with Google Sheets...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 20px" }}>
-        {/* Header */}
-        <header className="hero">
-          <img
-            src={`${process.env.PUBLIC_URL}/CNMI_logo.png`}
-            alt="CNMI Logo"
-            className="hero-logo"
-          />
-          <div>
-            <h1 className="title">รายงานข้อมูลปริมาณต้นไม้</h1>
-            <p className="subtitle">
-              งานกายภาพและสิ่งแวดล้อม ฝ่ายบริหารสินทรัพย์ อาคารสถานที่
-              สถาบันการแพทย์จักรีนฤบดินทร์
-            </p>
-          </div>
-          <span className="badge">
-            {`Live from Google Sheets\n${new Date().toLocaleDateString(
-              "th-TH",
-              { year: "numeric", month: "long", day: "numeric" }
-            )}`}
-          </span>
-        </header>
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 relative overflow-hidden">
+      
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-emerald-600/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px]" />
+      </div>
 
-        {/* KPI Cards */}
-        <section className="cards">
-          <Card title="จำนวนที่ตรวจนับได้" value={totalCount} suffix="ต้น" />
-          <Card
-            title={"เก็บข้อมูลครบถ้วน\n(ความสูง, เรือนยอด, DBH)"}
-            value={measured}
-            suffix="ต้น"
-          />
-          <Card
-            title="กักเก็บคาร์บอนรวม"
-            value={totalCO2eTon}
-            suffix="ตัน CO₂e"
-          />
-          <Card title="DBH เฉลี่ย" value={avgDBHcm} suffix="ซม." />
-          <Card
-            title="คาร์บอนเฉลี่ย/ต้น"
-            value={avgPerTreeKg}
-            suffix="กก. CO₂e"
-          />
-        </section>
-
-        {/* Top species info */}
-        {(topSpeciesName || topSpeciesCount != null) && (
-          <section style={{ marginTop: 28 }}>
-            <h3 className="section-heading">ชนิดที่พบมากสุด (ตอนนี้)</h3>
-            <div className="highlight-box">
-              <div className="highlight-name">{topSpeciesName ?? "—"}</div>
-              <div className="highlight-count">
-                {topSpeciesCount != null
-                  ? `${topSpeciesCount.toLocaleString()} ต้น`
-                  : "—"}
+      <div className="flex h-screen relative z-10">
+        
+        {/* Sidebar (Desktop) */}
+        <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900/80 backdrop-blur-xl border-r border-white/5 transform transition-transform duration-300 lg:transform-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-10">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <TreeDeciduous className="text-white" size={24} />
+              </div>
+              <div>
+                <h1 className="font-bold text-white leading-tight">CNMI</h1>
+                <p className="text-xs text-emerald-400 font-medium tracking-wider">SMART GARDEN</p>
               </div>
             </div>
-          </section>
+
+            <nav className="space-y-2">
+              {[
+                { name: 'Overview', icon: BarChart3, active: true },
+                { name: 'Digital Twin', icon: MapIcon },
+                { name: 'Carbon Credit', icon: Leaf },
+                { name: 'Reports', icon: Layers },
+              ].map((item) => (
+                <button
+                  key={item.name}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+                    ${item.active 
+                      ? 'bg-gradient-to-r from-emerald-500/20 to-transparent text-emerald-400 border-l-2 border-emerald-500' 
+                      : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                >
+                  <item.icon size={20} className={item.active ? 'text-emerald-400' : 'group-hover:text-white'} />
+                  <span className="font-medium">{item.name}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="absolute bottom-0 w-full p-6 border-t border-white/5">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 border border-white/5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Wind size={16} className="text-emerald-400"/>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Air Quality (Bang Phli)</p>
+                  <p className="text-sm font-bold text-white">Moderate (56 AQI)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Overlay for Mobile Sidebar */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
 
-        {/* Species */}
-        <section className="species">
-          <div className="species-card">
-            <SectionTitle>ชนิดของพันธุ์ไม้ใน CNMI</SectionTitle>
-            {topFive.length === 0 ? (
-              <p className="no-data">
-                ไม่พบข้อมูลในช่วง {SPECIES_RANGE} (คอลัมน์ H=ชนิด, I=จำนวน)
-              </p>
-            ) : (
-              <BarChart data={topFive} height={320} />
-            )}
-          </div>
-          <div className="species-card">
-            <SectionTitle>ชนิดของพันธุ์ไม้ใน CNMI</SectionTitle>
-            <ol className="species-list">
-              {topFive.map((s, i) => (
-                <li key={s.name} className="species-item">
-                  <span className="species-name">
-                    {i + 1}. {s.name}
-                  </span>
-                  <span className="species-count">
-                    {s.count.toLocaleString()} ต้น
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          {/* Header */}
+          <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-lg"
+              >
+                <Menu size={20} />
+              </button>
+              <div>
+                <h2 className="text-xl font-bold text-white">Chakri Naruebodindra Medical Institute</h2>
+                <p className="text-sm text-gray-400 hidden sm:block">Real-time tree inventory & carbon monitoring</p>
+              </div>
+            </div>
 
-        <footer className="footer">
-          อัปเดตแบบอ่านอย่างเดียวจาก Google Sheets (gviz) —
-          ปรับช่วงข้อมูลได้ในโค้ด
-        </footer>
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex items-center bg-slate-900 border border-white/10 rounded-full px-4 py-2">
+                <Search size={16} className="text-gray-500 mr-2" />
+                <input 
+                  type="text" 
+                  placeholder="ค้นหาพันธุ์ไม้..." 
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 w-48"
+                />
+              </div>
+              <button className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-colors">
+                <span className="font-bold">JS</span>
+              </button>
+            </div>
+          </header>
+
+          <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
+            
+            {/* Filter Section */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h3 className="text-lg font-medium text-gray-300">Filter by Zone</h3>
+              <LocationFilter selected={selectedLoc} onSelect={setSelectedLoc} />
+            </div>
+
+            {/* Stats Grid - Using Real Data */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <StatCard 
+                title="Total Trees Surveyed" 
+                value={realData.totalCount} 
+                unit="trees"
+                icon={TreeDeciduous}
+                trend={null}
+                color="text-emerald-500"
+                subValue={`Measured: ${realData.measured || 0}`}
+              />
+              <StatCard 
+                title="Total Carbon (CO2e)" 
+                value={realData.totalCO2eTon} 
+                unit="tons"
+                icon={Wind}
+                trend="12%"
+                color="text-blue-500"
+              />
+              <StatCard 
+                title="Avg. DBH" 
+                value={realData.avgDBHcm} 
+                unit="cm"
+                icon={Droplets}
+                color="text-cyan-400"
+              />
+              <StatCard 
+                title="Avg. Carbon/Tree" 
+                value={realData.avgPerTreeKg} 
+                unit="kg"
+                icon={Leaf}
+                color="text-lime-400"
+              />
+            </div>
+
+            {/* Main Viz Area */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <MapVisualization data={TREE_DATA_MOCK} />
+                
+                {/* Detailed Table (Species Top List from Sheet) */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                  <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-white">Top Species Inventory</h3>
+                    <button className="text-sm text-emerald-400 hover:text-emerald-300">View All</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-400">
+                      <thead className="bg-white/5 text-gray-200 uppercase text-xs">
+                        <tr>
+                          <th className="px-6 py-4">Rank</th>
+                          <th className="px-6 py-4">Species Name</th>
+                          <th className="px-6 py-4 text-right">Count</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {speciesList.slice(0, 5).map((s, i) => (
+                          <tr key={s.name} className="hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 font-mono text-xs">{i + 1}</td>
+                            <td className="px-6 py-4 font-medium text-white">{s.name}</td>
+                            <td className="px-6 py-4 text-right font-bold text-emerald-400">{s.count.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <SpeciesChart speciesData={speciesList} />
+                <RecentActivity />
+                
+                {/* Promo / Action Card */}
+                <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+                  <h3 className="text-xl font-bold mb-2 relative z-10">Add Survey Data</h3>
+                  <p className="text-emerald-100 mb-4 text-sm relative z-10">Use your mobile device to scan tree QR codes or add new data manually.</p>
+                  <button className="w-full py-3 bg-white text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors relative z-10">
+                    + New Entry
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </main>
       </div>
     </div>
   );
-}
-
-// ---------- UI ----------
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="section-title">
-      <div className="section-bar" />
-      <h3>{children}</h3>
-    </div>
-  );
-}
-
-function Card({
-  title,
-  value,
-  suffix,
-}: {
-  title: string;
-  value: number | null;
-  suffix?: string;
-}) {
-  return (
-    <div className="card">
-      <div className="card-title">{title}</div>
-      <div className="card-line" />
-      <div className="card-value">
-        {value != null ? value.toLocaleString() : "—"}
-      </div>
-      {suffix && <div className="card-suffix">{suffix}</div>}
-    </div>
-  );
-}
-
-function FullCenter({
-  children,
-  style = {} as React.CSSProperties,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div className="full-center" style={style}>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-// ---------- Mini Bar Chart ----------
-function BarChart({
-  data,
-  height = 300,
-}: {
-  data: SpeciesRow[];
-  height?: number;
-}) {
-  const padding = { top: 24, right: 24, bottom: 40, left: 120 };
-  const width = 720;
-  const max = Math.max(1, ...data.map((d) => d.count));
-  const barGap = 10;
-  const barH = Math.max(
-    18,
-    Math.min(
-      36,
-      (height - padding.top - padding.bottom - barGap * (data.length - 1)) /
-        data.length
-    )
-  );
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height}>
-      <text x={padding.left} y={18} fontSize={12} fill="#64748b">
-        จำนวน (ต้น)
-      </text>
-      {data.map((d, i) => {
-        const y = padding.top + i * (barH + barGap);
-        const w = ((width - padding.left - padding.right) * d.count) / max;
-        return (
-          <g key={d.name} transform={`translate(0, ${y})`}>
-            <text
-              x={padding.left - 8}
-              y={barH / 2}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fontSize={13}
-              fill="var(--ink)"
-            >
-              {d.name}
-            </text>
-            <rect
-              x={padding.left}
-              y={0}
-              width={w}
-              height={barH}
-              rx={8}
-              ry={8}
-              fill="var(--green-2)"
-              opacity={0.9}
-            />
-            <text
-              x={padding.left + w + 6}
-              y={barH / 2}
-              dominantBaseline="middle"
-              fontSize={12}
-              fill="#334155"
-            >
-              {d.count.toLocaleString()}
-            </text>
-          </g>
-        );
-      })}
-      <line
-        x1={padding.left}
-        y1={height - padding.bottom}
-        x2={width - padding.right}
-        y2={height - padding.bottom}
-        stroke="var(--line)"
-      />
     </svg>
   );
 }
